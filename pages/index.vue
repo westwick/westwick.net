@@ -1,0 +1,4 @@
+<template>
+  <SidebarComponent />
+  <TerminalComponent />
+</template>
