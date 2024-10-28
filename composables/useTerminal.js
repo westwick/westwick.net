@@ -1,6 +1,11 @@
 import { ref } from "vue";
+// works in build
 import xtermPkg from "@xterm/xterm";
 const { Terminal } = xtermPkg;
+
+// works in dev
+// import { Terminal } from "@xterm/xterm";
+
 import { executeCommand } from "../utils/commands";
 
 import "@xterm/xterm/css/xterm.css";
@@ -15,8 +20,19 @@ export function useTerminal() {
         cursorBlink: true,
         fontFamily: "'Roboto Mono', monospace",
         theme: {
-          background: "#000",
-          black: "#000000",
+          background: getComputedStyle(document.documentElement)
+            .getPropertyValue("--terminal-background")
+            .trim(),
+          black: getComputedStyle(document.documentElement)
+            .getPropertyValue("--terminal-background")
+            .trim(),
+          green: getComputedStyle(document.documentElement)
+            .getPropertyValue("--secondary-color")
+            .trim(),
+          // Map ANSI bright green (92/32) to primary color
+          brightGreen: getComputedStyle(document.documentElement)
+            .getPropertyValue("--primary-color")
+            .trim(),
         },
       });
 
@@ -78,9 +94,6 @@ export function useTerminal() {
       terminalInstance.value.open(element);
       terminalInstance.value.loadAddon(new WebglAddon());
       fitAddon.fit();
-      setTimeout(() => {
-        // terminalInstance.value.focus();
-      }, 100);
 
       // Import and register the new link provider
       const { createLinkProvider } = await import(

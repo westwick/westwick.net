@@ -23,6 +23,7 @@ export const AVAILABLE_COMMANDS = {
         terminal.writeln(`  ${cmd} - ${details.description}`);
       });
       terminal.write("\r\n$ ");
+      terminal.scrollToBottom();
     },
   },
   games: {
@@ -30,6 +31,7 @@ export const AVAILABLE_COMMANDS = {
     action: (terminal) => {
       terminal.writeln("\r\n!! Games !!");
       terminal.write("\r\n$ ");
+      terminal.scrollToBottom();
     },
   },
   music: {
@@ -37,6 +39,7 @@ export const AVAILABLE_COMMANDS = {
     action: (terminal) => {
       terminal.writeln("\r\nOpening music player...");
       terminal.write("\r\n$ ");
+      terminal.scrollToBottom();
     },
   },
 };

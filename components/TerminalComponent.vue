@@ -1,6 +1,7 @@
 <template>
   <div class="terminal">
     <div class="terminal-wrap">
+      <SidebarComponent />
       <div ref="terminalContainer" class="terminal-container"></div>
     </div>
   </div>
@@ -68,17 +69,18 @@ onMounted(() => {
   margin-top: 50px;
 }
 .terminal-wrap {
-  background: #000;
+  background: var(--terminal-background);
   padding: 16px;
   padding-right: 0;
   border-radius: 5px;
-  border: 2px solid #64c20c;
+  border: 2px solid var(--primary-color);
   transition: all 0.4s ease-in-out;
+  position: relative;
 }
 
 .terminal-wrap:focus-within {
-  box-shadow: 0px 0px 6px 2px rgba(43, 255, 0, 0.5);
-  border-color: #7bff00;
+  box-shadow: 0px 0px 6px 2px var(--primary-color-shadow);
+  border-color: var(--primary-color);
 }
 .terminal-container {
   width: 740px;

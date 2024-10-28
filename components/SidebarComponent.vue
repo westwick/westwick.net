@@ -1,31 +1,51 @@
 <template>
   <div id="sidebar">
-    <SquareTerminal color="#7bff00" @click="handleClick('home')" />
-    <Gamepad2 color="green" @click="handleClick('games')" />
-    <Headphones color="green" @click="handleClick('music')" />
-    <Mail color="green" @click="handleClick('messages')" />
-    <SquareTerminal color="green" @click="handleClick('help')" />
+    <SquareTerminal :color="primaryColor" @click="handleClick('home')" />
+    <Gamepad2 :color="secondaryColor" @click="handleClick('games')" />
+    <Headphones :color="secondaryColor" @click="handleClick('music')" />
+    <Mail :color="secondaryColor" @click="handleClick('messages')" />
+    <Settings :color="secondaryColor" @click="handleClick('help')" />
   </div>
 </template>
 
 <script setup>
-import { SquareTerminal, Gamepad2, Headphones, Mail } from "lucide-vue-next";
+import { ref, onMounted } from "vue";
+import {
+  SquareTerminal,
+  Gamepad2,
+  Headphones,
+  Mail,
+  Settings,
+} from "lucide-vue-next";
 
-const { sendCommand } = useTerminal();
+const { sendCommand, terminal } = useTerminal();
+const primaryColor = ref("");
+const secondaryColor = ref("");
+
+onMounted(() => {
+  primaryColor.value = getComputedStyle(document.documentElement)
+    .getPropertyValue("--primary-color")
+    .trim();
+  secondaryColor.value = getComputedStyle(document.documentElement)
+    .getPropertyValue("--secondary-color")
+    .trim();
+});
 
 const handleClick = (command) => {
   sendCommand(command);
+  terminal.value.focus();
 };
 </script>
 
 <style>
 #sidebar {
-  position: fixed;
-  top: 100px;
-  left: 0;
-  border: 2px solid #7bff00;
-  border-left: none;
-  border-radius: 0 5px 5px 0;
+  position: absolute;
+  right: 100%; /* This positions it directly to the left of the terminal */
+  top: 33%;
+  transform: translateY(-50%);
+  border: 2px solid var(--primary-color);
+  border-right: none;
+  border-radius: 5px 0px 0px 5px;
   padding: 12px;
   display: flex;
   flex-direction: column;

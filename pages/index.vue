@@ -1,4 +1,5 @@
 <template>
-  <SidebarComponent />
   <TerminalComponent />
 </template>
+
+<style scoped></style>
