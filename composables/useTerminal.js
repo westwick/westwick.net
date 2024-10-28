@@ -1,5 +1,6 @@
 import { ref } from "vue";
-import { Terminal } from "@xterm/xterm";
+import xtermPkg from "@xterm/xterm";
+const { Terminal } = xtermPkg;
 import { executeCommand } from "../utils/commands";
 
 import "@xterm/xterm/css/xterm.css";
