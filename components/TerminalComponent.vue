@@ -1,15 +1,31 @@
 <template>
   <div class="terminal">
-    <div class="terminal-wrap">
+    <div
+      class="terminal-wrap"
+      :class="{ 'terminal-focused': !focusedAppId }"
+      :style="{ zIndex: terminalZIndex }"
+      @mousedown="clearAppFocus"
+    >
       <SidebarComponent />
       <div ref="terminalContainer" class="terminal-container"></div>
     </div>
+
+    <!-- App Container -->
+    <component
+      v-for="app in activeApps"
+      :key="app.id"
+      :is="app.component"
+      :app-id="app.id"
+      @close="closeApp(app.id)"
+      class="app-instance"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed, defineAsyncComponent } from "vue";
 import { mainmenu } from "@/assets/mainmenu.js";
+import { useAppState } from "~/composables/useAppState";
 
 const terminalContainer = ref(null);
 const { initializeTerminal, writeln, terminal } = useTerminal();
@@ -18,6 +34,10 @@ const dots = 5;
 let direction = 1;
 let currentDotIndex = 0;
 let loadingInterval;
+
+const { activeApps, focusedAppId, closeApp } = useAppState();
+
+const terminalZIndex = computed(() => (focusedAppId.value === null ? 100 : 10));
 
 const showLoadingAnimation = () => {
   writeln("Establishing connection     ");
@@ -60,6 +80,10 @@ onMounted(() => {
     showLoadingAnimation();
   }
 });
+
+const clearAppFocus = () => {
+  focusedAppId.value = null;
+};
 </script>
 
 <style scoped>
@@ -84,6 +108,15 @@ onMounted(() => {
 }
 .terminal-container {
   width: 740px;
-  height: 350px;
+  height: 550px;
+}
+
+.app-instance {
+  position: absolute;
+}
+
+.terminal-focused {
+  border-color: var(--primary-color);
+  box-shadow: 0px 0px 6px 2px var(--primary-color-shadow);
 }
 </style>

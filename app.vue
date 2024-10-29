@@ -13,6 +13,7 @@
   --primary-color: #7bff00;
   --primary-color-shadow: rgba(123, 255, 0, 0.5);
   --secondary-color: #008000;
+  --border-color: #008000;
   --terminal-background: #000000;
 
   /* --background-color: #181818;

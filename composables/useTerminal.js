@@ -1,10 +1,10 @@
 import { ref } from "vue";
 // works in build
-import xtermPkg from "@xterm/xterm";
-const { Terminal } = xtermPkg;
+// import xtermPkg from "@xterm/xterm";
+// const { Terminal } = xtermPkg;
 
 // works in dev
-// import { Terminal } from "@xterm/xterm";
+import { Terminal } from "@xterm/xterm";
 
 import { executeCommand } from "../utils/commands";
 

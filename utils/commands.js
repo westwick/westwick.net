@@ -3,6 +3,7 @@ export const COMMAND_COLORS = {
 };
 
 import { mainmenu } from "@/assets/mainmenu.js";
+import { useAppState } from "~/composables/useAppState";
 
 export const AVAILABLE_COMMANDS = {
   home: {
@@ -29,7 +30,9 @@ export const AVAILABLE_COMMANDS = {
   games: {
     description: "Launch games menu",
     action: (terminal) => {
-      terminal.writeln("\r\n!! Games !!");
+      const { launchApp } = useAppState();
+      launchApp("GameSenet");
+      terminal.writeln("\r\nLaunching games...");
       terminal.write("\r\n$ ");
       terminal.scrollToBottom();
     },
@@ -37,7 +40,9 @@ export const AVAILABLE_COMMANDS = {
   music: {
     description: "Open music player",
     action: (terminal) => {
-      terminal.writeln("\r\nOpening music player...");
+      const { launchApp } = useAppState();
+      launchApp("Music");
+      terminal.writeln("\r\nLaunching music player...");
       terminal.write("\r\n$ ");
       terminal.scrollToBottom();
     },

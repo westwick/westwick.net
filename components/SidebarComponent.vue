@@ -44,7 +44,7 @@ const handleClick = (command) => {
   top: 33%;
   transform: translateY(-50%);
   border: 2px solid var(--primary-color);
-  border-right: none;
+  background-color: var(--background-color);
   border-radius: 5px 0px 0px 5px;
   padding: 12px;
   display: flex;
