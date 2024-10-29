@@ -1,11 +1,12 @@
 <template>
-  <div :class="`house house${id}`">
+  <div class="house" :class="`house${id}`" :data-house="id">
     <div class="house-id">{{ id <= 30 ? id : "exit" }}</div>
     <div
       v-if="showPiece"
       :class="`piece piece-${color} ${isSelected ? 'selected' : ''} ${
         canMove ? 'can-move' : ''
       } ${isTarget ? 'target' : ''}`"
+      :data-piece="pieceId"
       @click="$emit('piece-selected', id)"
     ></div>
     <div
@@ -88,6 +89,7 @@ const showPiece = computed(() => pieceId.value !== undefined);
   left: 2px;
   font-size: 12px;
   color: #666;
+  display: none;
 }
 
 .piece {

@@ -13,7 +13,7 @@
       <button
         class="roller"
         @click="handleRoll"
-        :disabled="turnStatus !== 'roll'"
+        :disabled="turnStatus !== 'roll' || playerTurn !== 'white'"
       >
         Roll
       </button>
@@ -25,57 +25,59 @@
       <pre>{{ JSON.stringify(stats, null, 1) }}</pre>
     </div> -->
 
-    <div class="row row1">
-      <SenetHouse
-        v-for="id in row1"
-        :key="id"
-        :id="id"
-        :board-state="boardState"
-        :house-state="houseState"
-        :valid-moves="validMoves"
-        :selected-id="selectedPiece"
-        :target="targetHouse"
-        @piece-selected="pieceSelected"
-      />
-    </div>
+    <div class="board">
+      <div class="row row1">
+        <SenetHouse
+          v-for="id in row1"
+          :key="id"
+          :id="id"
+          :board-state="boardState"
+          :house-state="houseState"
+          :valid-moves="validMoves"
+          :selected-id="selectedPiece"
+          :target="targetHouse"
+          @piece-selected="pieceSelected"
+        />
+      </div>
 
-    <div class="row row2">
-      <SenetHouse
-        v-for="id in row2"
-        :key="id"
-        :id="id"
-        :board-state="boardState"
-        :house-state="houseState"
-        :valid-moves="validMoves"
-        :selected-id="selectedPiece"
-        :target="targetHouse"
-        @piece-selected="pieceSelected"
-      />
-    </div>
+      <div class="row row2">
+        <SenetHouse
+          v-for="id in row2"
+          :key="id"
+          :id="id"
+          :board-state="boardState"
+          :house-state="houseState"
+          :valid-moves="validMoves"
+          :selected-id="selectedPiece"
+          :target="targetHouse"
+          @piece-selected="pieceSelected"
+        />
+      </div>
 
-    <div class="row row3">
-      <SenetHouse
-        v-for="id in row3"
-        :key="id"
-        :id="id"
-        :board-state="boardState"
-        :house-state="houseState"
-        :valid-moves="validMoves"
-        :selected-id="selectedPiece"
-        :target="targetHouse"
-        @piece-selected="pieceSelected"
-      />
-      <SenetHouse
-        v-if="showExit"
-        :key="31"
-        :id="31"
-        :board-state="boardState"
-        :house-state="houseState"
-        :valid-moves="validMoves"
-        :selected-id="selectedPiece"
-        :target="targetHouse"
-        @piece-selected="pieceSelected"
-      />
+      <div class="row row3">
+        <SenetHouse
+          v-for="id in row3"
+          :key="id"
+          :id="id"
+          :board-state="boardState"
+          :house-state="houseState"
+          :valid-moves="validMoves"
+          :selected-id="selectedPiece"
+          :target="targetHouse"
+          @piece-selected="pieceSelected"
+        />
+        <SenetHouse
+          v-if="showExit"
+          :key="31"
+          :id="31"
+          :board-state="boardState"
+          :house-state="houseState"
+          :valid-moves="validMoves"
+          :selected-id="selectedPiece"
+          :target="targetHouse"
+          @piece-selected="pieceSelected"
+        />
+      </div>
     </div>
 
     <div class="rules">
@@ -113,6 +115,7 @@
 </template>
 
 <script setup>
+import gsap from "gsap";
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import SenetHouse from "./SenetHouse.vue";
 
@@ -137,6 +140,50 @@ const stats = ref({
 });
 const playerTurn = ref("white");
 const turnStatus = ref("roll");
+
+const isComputerTurn = computed(() => playerTurn.value === "black");
+const isAnimating = ref(false);
+
+const calculateBestMove = () => {
+  const possibleMoves = [1, 2, 3, 4, 5].filter(
+    (piece) => validMoves.value[piece]
+  );
+  if (!possibleMoves.length) return null;
+
+  // Sort by position (prefer pieces closer to end)
+  possibleMoves.sort((a, b) => boardState.value[b] - boardState.value[a]);
+
+  // Check if we can capture
+  for (const piece of possibleMoves) {
+    const target = boardState.value[piece] + roll.value;
+    if (
+      houseState.value[target] &&
+      getColor(houseState.value[target]) === "white"
+    ) {
+      return piece;
+    }
+  }
+
+  // Otherwise move the furthest piece
+  return possibleMoves[0];
+};
+
+const makeComputerMove = async () => {
+  if (!isComputerTurn.value || turnStatus.value === "roll") return;
+
+  // Add small delay to make it feel more natural
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  const bestMove = calculateBestMove();
+  if (!bestMove) {
+    handleSkip();
+    return;
+  }
+
+  selectedPiece.value = bestMove;
+  const targetHouseId = boardState.value[bestMove] + roll.value;
+  pieceSelected(targetHouseId);
+};
 
 // Helper methods
 const getColor = (pieceId) => {
@@ -328,13 +375,91 @@ const handleSkip = () => {
   stats.value.turn++;
 };
 
-const pieceSelected = (houseId) => {
+const pieceSelected = async (houseId) => {
+  if (isAnimating.value) return;
   const pieceId = houseState.value[houseId];
 
   if (houseId === targetHouse.value && selectedPiece.value) {
+    isAnimating.value = true;
     const newBoardState = { ...boardState.value };
     let trapped = false;
 
+    // Get DOM elements for animation
+    const pieceElement = document.querySelector(
+      `[data-piece="${selectedPiece.value}"]`
+    );
+    const targetElement = document.querySelector(`[data-house="${houseId}"]`);
+
+    if (pieceElement && targetElement) {
+      // Calculate absolute positions
+      const pieceRect = pieceElement.getBoundingClientRect();
+      const targetRect = targetElement.getBoundingClientRect();
+
+      // Reset any existing transforms
+      gsap.set(pieceElement, { clearProps: "all" });
+
+      // Animate using absolute values
+      await gsap.fromTo(
+        pieceElement,
+        {
+          position: "fixed",
+          left: pieceRect.left,
+          top: pieceRect.top,
+          width: pieceRect.width,
+          height: pieceRect.height,
+          margin: 0,
+        },
+        {
+          duration: 0.2,
+          left: targetRect.left + 8,
+          top: targetRect.top + 8,
+          ease: "power2.out",
+        }
+      );
+
+      // If it's a capture, animate the captured piece
+      if (houseState.value[houseId]) {
+        const capturedPiece = document.querySelector(
+          `[data-piece="${houseState.value[houseId]}"]`
+        );
+        const oldPosition = document.querySelector(
+          `[data-house="${boardState.value[selectedPiece.value]}"]`
+        );
+
+        if (capturedPiece && oldPosition) {
+          const capturedRect = capturedPiece.getBoundingClientRect();
+          const oldRect = oldPosition.getBoundingClientRect();
+
+          // Reset any existing transforms
+          gsap.set(capturedPiece, { clearProps: "all" });
+
+          await gsap.fromTo(
+            capturedPiece,
+            {
+              position: "fixed",
+              left: capturedRect.left,
+              top: capturedRect.top,
+              width: capturedRect.width,
+              height: capturedRect.height,
+              margin: 0,
+            },
+            {
+              duration: 0.2,
+              left: oldRect.left + 10,
+              top: oldRect.top + 10,
+              ease: "power2.out",
+            }
+          );
+        }
+      }
+
+      // Reset positions after animation
+      gsap.set([pieceElement, `[data-piece="${houseState.value[houseId]}"]`], {
+        clearProps: "all",
+      });
+    }
+
+    // Rest of your existing move logic
     if (getColor(houseState.value[houseId]) === "empty") {
       if (houseId === 27) {
         trapped = true;
@@ -353,7 +478,9 @@ const pieceSelected = (houseId) => {
 
     selectedPiece.value = undefined;
     boardState.value = newBoardState;
+    isAnimating.value = false;
 
+    // Rest of your existing logic
     if (playerTurn.value === "white") {
       stats.value.whiteDistance += roll.value;
     } else {
@@ -415,9 +542,23 @@ watch(
 watch(turn, (newTurn) => {
   stats.value.turn = newTurn;
 });
+
+watch([playerTurn, turnStatus], async ([newPlayer, newStatus]) => {
+  if (newPlayer === "black" && newStatus === "roll") {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    handleRoll();
+  }
+  if (newPlayer === "black" && newStatus === "move") {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    makeComputerMove();
+  }
+});
 </script>
 
 <style scoped>
+.board {
+  border: 2px solid var(--secondary-color);
+}
 .rapper {
   display: flex;
   flex-direction: column;
@@ -428,7 +569,7 @@ watch(turn, (newTurn) => {
   text-align: center;
   margin-bottom: 5px;
   display: flex;
-  color: var(--primary-color);
+  color: #eee;
 }
 
 .row {
