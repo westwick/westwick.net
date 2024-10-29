@@ -26,6 +26,34 @@
     </div> -->
 
     <div class="board">
+      <svg
+        class="move-arrows"
+        ref="arrowsSvg"
+        :width="boardWidth"
+        :height="boardHeight"
+      >
+        <defs>
+          <marker
+            id="arrowhead"
+            markerWidth="10"
+            markerHeight="7"
+            refX="9"
+            refY="3.5"
+            :orient="arrowOrientation"
+          >
+            <polygon points="0 0, 10 3.5, 0 7" fill="var(--primary-color)" />
+          </marker>
+        </defs>
+        <path
+          v-if="showArrow"
+          :d="arrowPath"
+          fill="none"
+          stroke="var(--primary-color)"
+          stroke-width="2"
+          marker-end="url(#arrowhead)"
+        />
+      </svg>
+
       <div class="row row1">
         <SenetHouse
           v-for="id in row1"
@@ -37,6 +65,8 @@
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
+          @piece-hover="onPieceHover"
+          @piece-leave="onPieceLeave"
         />
       </div>
 
@@ -51,6 +81,8 @@
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
+          @piece-hover="onPieceHover"
+          @piece-leave="onPieceLeave"
         />
       </div>
 
@@ -65,6 +97,8 @@
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
+          @piece-hover="onPieceHover"
+          @piece-leave="onPieceLeave"
         />
         <SenetHouse
           v-if="showExit"
@@ -76,6 +110,8 @@
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
+          @piece-hover="onPieceHover"
+          @piece-leave="onPieceLeave"
         />
       </div>
     </div>
@@ -553,11 +589,219 @@ watch([playerTurn, turnStatus], async ([newPlayer, newStatus]) => {
     makeComputerMove();
   }
 });
+
+// Add new refs and computed properties
+const arrowsSvg = ref(null);
+const boardWidth = ref(0);
+const boardHeight = ref(0);
+const hoverPiece = ref(null);
+
+// Helper to get next house in path
+const getNextHouseInPath = (current, end) => {
+  // Special case for vertical moves
+  if (current === 10 && end >= 11) return 11;
+  if (current === 20 && end >= 21) return 21;
+
+  const currentRow = Math.floor((current - 1) / 10);
+  const endRow = Math.floor((end - 1) / 10);
+
+  // Handle movements within each row
+  if (currentRow === 0) {
+    // Row 1: left to right
+    return current < end ? current + 1 : null;
+  } else if (currentRow === 1) {
+    // Row 2: right to left
+    if (endRow === 2) {
+      // Always move to 20 first when going to row 3
+      return 20;
+    }
+    return current > end ? current - 1 : null;
+  } else if (currentRow === 2) {
+    // Row 3: left to right
+    return current < end ? current + 1 : null;
+  }
+
+  return null;
+};
+
+const calculatePathBetweenHouses = (start, end) => {
+  // Special case for vertical moves
+  if ((start === 10 && end === 11) || (start === 20 && end === 21)) {
+    const startHouse = document.querySelector(`[data-house="${start}"]`);
+    const endHouse = document.querySelector(`[data-house="${end}"]`);
+    const svgRect = arrowsSvg.value?.getBoundingClientRect();
+
+    if (startHouse && endHouse && svgRect) {
+      const startRect = startHouse.getBoundingClientRect();
+      const endRect = endHouse.getBoundingClientRect();
+
+      const x = startRect.left - svgRect.left + startRect.width / 2;
+      const startY = startRect.top - svgRect.top + startRect.height / 2;
+      const endY = endRect.top - svgRect.top + endRect.height / 2;
+
+      return `M ${x},${startY} L ${x},${endY}`;
+    }
+  }
+
+  const path = [];
+  let current = start;
+
+  const svgRect = arrowsSvg.value?.getBoundingClientRect();
+  if (!svgRect) return "";
+
+  const housesInPath = [];
+  const maxSteps = 30;
+  let steps = 0;
+
+  // Build path
+  while (current !== end && steps < maxSteps) {
+    housesInPath.push(current);
+    const next = getNextHouseInPath(current, end);
+    if (!next) break;
+    current = next;
+    steps++;
+  }
+  housesInPath.push(end);
+
+  // Create SVG path
+  housesInPath.forEach((houseId, index) => {
+    const house = document.querySelector(`[data-house="${houseId}"]`);
+    if (!house) return;
+
+    const rect = house.getBoundingClientRect();
+    const point = {
+      x: rect.left - svgRect.left + rect.width / 2,
+      y: rect.top - svgRect.top + rect.height / 2,
+    };
+
+    if (index === 0) {
+      path.push(`M ${point.x},${point.y}`);
+    } else {
+      // Check if this is a corner (row transition)
+      const prevHouse = housesInPath[index - 1];
+      const prevRow = Math.floor((prevHouse - 1) / 10);
+      const currentRow = Math.floor((houseId - 1) / 10);
+
+      if (prevRow !== currentRow) {
+        // This is a corner - add a vertical line first
+        const prevHouseEl = document.querySelector(
+          `[data-house="${prevHouse}"]`
+        );
+        const prevRect = prevHouseEl.getBoundingClientRect();
+        path.push(
+          `L ${prevRect.left - svgRect.left + prevRect.width / 2},${point.y}`
+        );
+      }
+
+      path.push(`L ${point.x},${point.y}`);
+    }
+  });
+
+  return path.join(" ");
+};
+
+// Make sure arrowPath is using both hover and selected states
+const arrowPath = computed(() => {
+  const pieceId = selectedPiece.value || hoverPiece.value;
+  if (!pieceId || !validMoves.value[pieceId]) return "";
+
+  const start = boardState.value[pieceId];
+  const end = start + roll.value;
+
+  return calculatePathBetweenHouses(start, end);
+});
+
+// And verify showArrow includes both states
+const showArrow = computed(() => {
+  return (
+    (hoverPiece.value && validMoves.value[hoverPiece.value]) ||
+    (selectedPiece.value && validMoves.value[selectedPiece.value])
+  );
+});
+
+// Add event handlers to SenetHouse component
+const onPieceHover = (pieceId) => {
+  if (turnStatus.value === "move" && validMoves.value[pieceId]) {
+    hoverPiece.value = pieceId;
+  }
+};
+
+const onPieceLeave = () => {
+  hoverPiece.value = null;
+};
+
+// Update board dimensions on mount
+onMounted(() => {
+  const updateBoardDimensions = () => {
+    const board = document.querySelector(".board");
+    if (board) {
+      const rect = board.getBoundingClientRect();
+      boardWidth.value = rect.width;
+      boardHeight.value = rect.height;
+    }
+  };
+
+  updateBoardDimensions();
+  window.addEventListener("resize", updateBoardDimensions);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", updateBoardDimensions);
+});
+
+// Add computed property for arrow marker
+const arrowMarker = computed(() => {
+  if (!hoverPiece.value || !validMoves.value[hoverPiece.value]) return "";
+
+  const start = boardState.value[hoverPiece.value];
+  const end = start + roll.value;
+
+  // Use downward arrow for vertical moves to 11 or 21
+  if ((start === 10 && end === 11) || (start === 20 && end === 21)) {
+    return "url(#arrowhead-down)";
+  }
+
+  return "url(#arrowhead)";
+});
+
+// Add computed property for path transform
+const pathTransform = computed(() => {
+  if (!hoverPiece.value || !validMoves.value[hoverPiece.value]) return "";
+
+  const start = boardState.value[hoverPiece.value];
+  const end = start + roll.value;
+
+  // For vertical moves, rotate the entire path
+  if ((start === 10 && end === 11) || (start === 20 && end === 21)) {
+    return "rotate(90)";
+  }
+
+  return "";
+});
+
+// Add a new computed property for vertical moves
+const isVerticalMove = computed(() => {
+  if (!hoverPiece.value || !validMoves.value[hoverPiece.value]) return false;
+  const start = boardState.value[hoverPiece.value];
+  const end = start + roll.value;
+  return (start === 10 && end === 11) || (start === 20 && end === 21);
+});
+
+const arrowOrientation = computed(() => {
+  const pieceId = selectedPiece.value || hoverPiece.value;
+  if (!pieceId || !validMoves.value[pieceId]) return "auto";
+
+  const start = boardState.value[pieceId];
+  const end = start + roll.value;
+
+  return end === 11 || end === 21 ? "90" : "auto";
+});
 </script>
 
 <style scoped>
 .board {
   border: 2px solid var(--secondary-color);
+  position: relative; /* Make sure this is set */
 }
 .rapper {
   display: flex;
@@ -599,5 +843,15 @@ watch([playerTurn, turnStatus], async ([newPlayer, newStatus]) => {
 
 .game-stats {
   margin: 20px 0;
+}
+
+.move-arrows {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 10;
+  width: 100%; /* Make sure SVG fills the board */
+  height: 100%;
 }
 </style>

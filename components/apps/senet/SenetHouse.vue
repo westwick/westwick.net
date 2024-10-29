@@ -1,5 +1,11 @@
 <template>
-  <div class="house" :class="`house${id}`" :data-house="id">
+  <div
+    class="house"
+    :class="`house${id}`"
+    :data-house="id"
+    @mouseover="emitHover"
+    @mouseleave="$emit('piece-leave')"
+  >
     <div class="house-id">{{ id <= 30 ? id : "exit" }}</div>
     <div
       v-if="showPiece"
@@ -43,7 +49,7 @@ const props = defineProps({
   },
 });
 
-defineEmits(["piece-selected"]);
+const emit = defineEmits(["piece-selected", "piece-hover", "piece-leave"]);
 
 const isSelected = computed(() => {
   return props.houseState && props.selectedId
@@ -70,6 +76,12 @@ const canMove = computed(
 );
 
 const showPiece = computed(() => pieceId.value !== undefined);
+
+const emitHover = () => {
+  if (pieceId.value) {
+    emit("piece-hover", pieceId.value);
+  }
+};
 </script>
 
 <style scoped>
