@@ -7,13 +7,16 @@
 </template>
 
 <style>
+* {
+  box-sizing: border-box;
+}
 :root {
   /* Default theme */
   --background-color: #131111;
   --primary-color: #7bff00;
   --primary-color-shadow: rgba(123, 255, 0, 0.5);
   --secondary-color: #008000;
-  --border-color: #008000;
+  --border-color: #3e413c;
   --terminal-background: #000000;
 
   /* --background-color: #181818;
@@ -25,6 +28,7 @@
   /* --background-color: #181818;
   --primary-color: rgb(235, 23, 235);
   --primary-color-shadow: rgba(235, 23, 235, 0.5);
+  --border-color: #3d333d;
   --secondary-color: #7c02ac;
   --terminal-background: #000; */
 }
@@ -34,8 +38,8 @@ body {
   font-family: "Roboto Mono", monospace;
 }
 ::-webkit-scrollbar {
-  width: 0px;
-  height: 0px;
+  width: 12px;
+  /* height: 0px; */
 }
 
 ::-webkit-scrollbar-thumb {

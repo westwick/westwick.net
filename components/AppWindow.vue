@@ -117,7 +117,7 @@ onBeforeUnmount(() => {
   background: var(--background-color);
   border: 2px solid var(--border-color);
   border-radius: 5px;
-  min-width: 600px;
+  min-width: 500px;
   min-height: 240px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
   transition: border-color 0.2s ease;

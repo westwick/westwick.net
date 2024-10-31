@@ -1,23 +1,13 @@
 <template>
   <div class="rapper">
-    <div class="game-state">
-      <p>{{ playerTurn }}'s turn:&nbsp;</p>
-      <p>
-        {{ playerTurn }} to {{ turnStatus }}
-        {{ turnStatus === "move" ? roll : "" }}
-      </p>
-      <div v-if="turnStatus === 'move' && noValidMoves">
-        <p>No Valid Moves!</p>
-        <button class="roller" @click="handleSkip">Next Turn</button>
-      </div>
-      <button
-        class="roller"
-        @click="handleRoll"
-        :disabled="turnStatus !== 'roll' || playerTurn !== 'white'"
-      >
-        Roll
-      </button>
-    </div>
+    <SenetControls
+      :player-turn="playerTurn"
+      :turn-status="turnStatus"
+      :roll="roll"
+      :no-valid-moves="noValidMoves"
+      @roll="handleRoll"
+      @skip="handleSkip"
+    />
 
     <!-- <h1>Senet</h1>
     <div class="game-stats">
@@ -56,12 +46,13 @@
 
       <div class="row row1">
         <SenetHouse
-          v-for="id in row1"
+          v-for="id in SENET_ROW_1"
           :key="id"
           :id="id"
           :board-state="boardState"
           :house-state="houseState"
           :valid-moves="validMoves"
+          :best-move="bestMove"
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
@@ -72,12 +63,13 @@
 
       <div class="row row2">
         <SenetHouse
-          v-for="id in row2"
+          v-for="id in SENET_ROW_2"
           :key="id"
           :id="id"
           :board-state="boardState"
           :house-state="houseState"
           :valid-moves="validMoves"
+          :best-move="bestMove"
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
@@ -88,12 +80,13 @@
 
       <div class="row row3">
         <SenetHouse
-          v-for="id in row3"
+          v-for="id in SENET_ROW_3"
           :key="id"
           :id="id"
           :board-state="boardState"
           :house-state="houseState"
           :valid-moves="validMoves"
+          :best-move="bestMove"
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
@@ -102,11 +95,13 @@
         />
         <SenetHouse
           v-if="showExit"
+          class="house-exit"
           :key="31"
           :id="31"
           :board-state="boardState"
           :house-state="houseState"
           :valid-moves="validMoves"
+          :best-move="bestMove"
           :selected-id="selectedPiece"
           :target="targetHouse"
           @piece-selected="pieceSelected"
@@ -115,38 +110,7 @@
         />
       </div>
     </div>
-
-    <div class="rules">
-      <p>
-        Senet is an ancient egyptian game played by pharaohs and may be up to
-        5000 years old making it the oldest known board game in the world.
-      </p>
-      <p>
-        Get your pieces to the end of the board before your opponent. If you
-        land on a space occupied by an opponent, capture it by exchanging their
-        places.
-      </p>
-      <p>
-        Rolls are 1 through 5. If you roll a 1, 4, or 5 you can roll again. If
-        you can make a valid move you must, and if you cannot make any valid
-        moves your turn ends.
-      </p>
-      <p>
-        Two pieces of the same color next to each other
-        <strong>in the same row</strong> are safe and may not be captured.
-      </p>
-      <p>
-        Three pieces of the same color all next to each other
-        <strong>in the same row</strong> are a blockade and may not be captured
-        or jumped over.
-      </p>
-      <p>
-        Squares 15, 26, 28 and 29 are safe spaces and may not be captured at any
-        time. You can only exit 28 and 29 with an exact roll.
-      </p>
-      <p>You cannot proceed past square 26 without stopping on it first.</p>
-      <p>If you land on square 27 you must return to square 15 instead.</p>
-    </div>
+    <SenetRules />
   </div>
 </template>
 
@@ -154,16 +118,19 @@
 import gsap from "gsap";
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import SenetHouse from "./SenetHouse.vue";
-
-// Constants
-const row1 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const row2 = [20, 19, 18, 17, 16, 15, 14, 13, 12, 11];
-const row3 = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30];
+import SenetControls from "./SenetControls.vue";
+import SenetRules from "./SenetRules.vue";
+import {
+  SENET_ROW_1,
+  SENET_ROW_2,
+  SENET_ROW_3,
+  INITIAL_BOARD_STATE,
+} from "./senetConstants";
 
 // Reactive state
 const boardState = ref({});
 const selectedPiece = ref(undefined);
-const roll = ref(0);
+const roll = ref({ value: 0, timestamp: Date.now() });
 const turn = ref(1);
 const stats = ref({
   turn: 1,
@@ -179,45 +146,229 @@ const turnStatus = ref("roll");
 
 const isComputerTurn = computed(() => playerTurn.value === "black");
 const isAnimating = ref(false);
+const bestMove = ref(null);
 
 const calculateBestMove = () => {
   const possibleMoves = [1, 2, 3, 4, 5].filter(
     (piece) => validMoves.value[piece]
   );
-  if (!possibleMoves.length) return null;
+  if (!possibleMoves.length) {
+    console.log("🤖 I have no valid moves available");
+    return null;
+  }
 
-  // Sort by position (prefer pieces closer to end)
-  possibleMoves.sort((a, b) => boardState.value[b] - boardState.value[a]);
+  // Helper to check if a move would create/maintain a blockade
+  const wouldCreateBlockade = (piece, target) => {
+    const row = Math.floor((target - 1) / 10);
+    const rowStart = row * 10 + 1;
+    const rowEnd = (row + 1) * 10;
 
-  // Check if we can capture
+    // Create temporary board state with the move
+    const tempState = { ...houseState.value };
+    if (tempState[target]) delete tempState[target];
+    delete tempState[boardState.value[piece]];
+    tempState[target] = piece;
+
+    // Check each possible sequence of 3 in the row
+    for (let i = rowStart; i <= rowEnd - 2; i++) {
+      const pieces = [tempState[i], tempState[i + 1], tempState[i + 2]];
+      if (pieces.every((p) => p && p <= 5)) return true;
+    }
+    return false;
+  };
+
+  // Helper to check if a move would break an existing blockade
+  const wouldBreakBlockade = (piece, currentState) => {
+    // First check if piece is part of any existing blockade
+    const currentPos = currentState[piece];
+    const row = Math.floor((currentPos - 1) / 10);
+    const rowStart = row * 10 + 1;
+    const rowEnd = (row + 1) * 10;
+
+    for (let i = rowStart; i <= rowEnd - 2; i++) {
+      const pieces = [
+        houseState.value[i],
+        houseState.value[i + 1],
+        houseState.value[i + 2],
+      ];
+      // If this sequence forms a blockade and includes our piece
+      if (pieces.every((p) => p && p <= 5) && pieces.includes(piece)) {
+        // Check if moving would break it and no new blockade would be created
+        const target = currentPos + roll.value.value;
+        if (!wouldCreateBlockade(piece, target)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // Helper to check if a move would land next to friendly piece
+  const wouldLandNextToFriendly = (target) => {
+    const prev = target - 1;
+    const next = target + 1;
+    const row = Math.floor((target - 1) / 10);
+    const prevRow = Math.floor((prev - 1) / 10);
+    const nextRow = Math.floor((next - 1) / 10);
+
+    // Create temporary board state to check after the move
+    const tempState = { ...houseState.value };
+
+    // Remove the piece from its current position
+    Object.entries(tempState).forEach(([house, piece]) => {
+      if (piece <= 5) {
+        // Only check black pieces
+        const currentPos = boardState.value[piece];
+        if (currentPos === prev || currentPos === next) {
+          delete tempState[house];
+        }
+      }
+    });
+
+    return (
+      (row === prevRow && tempState[prev] && tempState[prev] <= 5) ||
+      (row === nextRow && tempState[next] && tempState[next] <= 5)
+    );
+  };
+
+  // For each priority, filter moves that match and return the best one if found
   for (const piece of possibleMoves) {
-    const target = boardState.value[piece] + roll.value;
-    if (
-      houseState.value[target] &&
-      getColor(houseState.value[target]) === "white"
-    ) {
-      return piece;
+    const source = boardState.value[piece];
+    const target = source + roll.value.value;
+
+    // 1. Avoid trap square unless forced
+    if (target === 27) {
+      if (possibleMoves.length > 1) {
+        console.log(`🤖 Avoiding moving from ${source} to trap square (27)`);
+        continue;
+      } else {
+        console.log(`🤖 Forced to move from ${source} to trap square (27)`);
+        return piece;
+      }
+    }
+
+    // 2. Check blockade situations
+    const blockadeBreakers = possibleMoves.filter((p) =>
+      wouldBreakBlockade(p, boardState.value)
+    );
+    const safeMovers = possibleMoves.filter(
+      (p) => !blockadeBreakers.includes(p)
+    );
+
+    if (blockadeBreakers.length) {
+      if (safeMovers.length) {
+        // We have options that don't break blockades
+        const move = safeMovers[0];
+        const moveSource = boardState.value[move];
+        const moveTarget = moveSource + roll.value.value;
+        const breakerSource = boardState.value[blockadeBreakers[0]];
+        console.log(
+          `🤖 Moving from ${moveSource} to ${moveTarget} to maintain blockade (moving from ${breakerSource} would break it)`
+        );
+        return move;
+      } else if (possibleMoves.length === 1) {
+        // We're forced to break a blockade because it's our only move
+        const move = possibleMoves[0];
+        const moveSource = boardState.value[move];
+        const moveTarget = moveSource + roll.value.value;
+        console.log(
+          `🤖 Forced to break blockade by moving from ${moveSource} to ${moveTarget} - it's my only valid move`
+        );
+        return move;
+      }
+      // If we have multiple moves but they all break blockades, continue to other priorities
+    }
+
+    // 3. Create new blockade
+    const blockadeCreators = possibleMoves.filter((p) =>
+      wouldCreateBlockade(p, boardState.value[p] + roll.value.value)
+    );
+    if (blockadeCreators.length) {
+      const move = blockadeCreators[0];
+      const moveSource = boardState.value[move];
+      const moveTarget = moveSource + roll.value.value;
+      console.log(
+        `🤖 Creating new blockade by moving from ${moveSource} to ${moveTarget}`
+      );
+      return move;
+    }
+
+    // 4. Land next to friendly piece
+    const friendlyMoves = possibleMoves.filter((p) =>
+      wouldLandNextToFriendly(boardState.value[p] + roll.value.value)
+    );
+    if (friendlyMoves.length) {
+      const move = friendlyMoves[0];
+      const moveSource = boardState.value[move];
+      const moveTarget = moveSource + roll.value.value;
+      console.log(
+        `🤖 Moving from ${moveSource} to ${moveTarget} to protect friendly piece`
+      );
+      return move;
+    }
+
+    // 5. Land on safe squares
+    const safeSquares = [15, 26, 28, 29];
+    const safeMoves = possibleMoves.filter((p) =>
+      safeSquares.includes(boardState.value[p] + roll.value.value)
+    );
+    if (safeMoves.length) {
+      const move = safeMoves[0];
+      const moveSource = boardState.value[move];
+      const moveTarget = moveSource + roll.value.value;
+      console.log(`🤖 Moving from ${moveSource} to safe square ${moveTarget}`);
+      return move;
+    }
+
+    // 6. Capture enemy piece
+    const captureMoves = possibleMoves.filter((p) => {
+      const t = boardState.value[p] + roll.value.value;
+      return houseState.value[t] && houseState.value[t] >= 6;
+    });
+    if (captureMoves.length) {
+      const move = captureMoves[0];
+      const moveSource = boardState.value[move];
+      const moveTarget = moveSource + roll.value.value;
+      const capturedPiece = houseState.value[moveTarget];
+      console.log(
+        `🤖 Capturing enemy piece ${capturedPiece} at position ${moveTarget} with piece ${move}`
+      );
+      return move;
     }
   }
 
-  // Otherwise move the furthest piece
-  return possibleMoves[0];
+  // 7. Move furthest piece if no other conditions met
+  const furthestPiece = possibleMoves.sort(
+    (a, b) => boardState.value[b] - boardState.value[a]
+  )[0];
+  const moveSource = boardState.value[furthestPiece];
+  const moveTarget = moveSource + roll.value.value;
+  console.log(
+    `🤖 No special moves available. Moving furthest piece from ${moveSource} to ${moveTarget}`
+  );
+  return furthestPiece;
 };
 
 const makeComputerMove = async () => {
   if (!isComputerTurn.value || turnStatus.value === "roll") return;
 
-  // Add small delay to make it feel more natural
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  // Add small delay before showing the move
+  await new Promise((resolve) => setTimeout(resolve, 1));
 
-  const bestMove = calculateBestMove();
-  if (!bestMove) {
+  bestMove.value = calculateBestMove();
+  if (!bestMove.value) {
     handleSkip();
     return;
   }
 
-  selectedPiece.value = bestMove;
-  const targetHouseId = boardState.value[bestMove] + roll.value;
+  // Show the arrow by setting selectedPiece
+  selectedPiece.value = bestMove.value;
+
+  // Wait a moment to let player see the intended move
+  await new Promise((resolve) => setTimeout(resolve, 700));
+
+  // Make the move
+  const targetHouseId = boardState.value[bestMove.value] + roll.value.value;
   pieceSelected(targetHouseId);
 };
 
@@ -259,7 +410,7 @@ const canPieceMove = (pieceId) => {
   if (playerTurn.value === "white" && pieceId <= 5) return false;
   if (playerTurn.value === "black" && pieceId >= 6) return false;
 
-  const destination = boardState.value[pieceId] + roll.value;
+  const destination = boardState.value[pieceId] + roll.value.value;
   const destinationColor = getColor(houseState.value[destination]);
 
   if (destination === 31) return true;
@@ -287,7 +438,7 @@ const canPieceMove = (pieceId) => {
   if (destination > 26 && boardState.value[pieceId] !== 26) return false;
 
   // can't jump over a blockade
-  if (roll.value === 4) {
+  if (roll.value.value === 4) {
     if (
       isBlockade(
         [destination - 3, destination - 2, destination - 1],
@@ -298,7 +449,7 @@ const canPieceMove = (pieceId) => {
     }
   }
 
-  if (roll.value === 5) {
+  if (roll.value.value === 5) {
     if (
       isBlockade(
         [destination - 3, destination - 2, destination - 1],
@@ -329,7 +480,8 @@ const houseState = computed(() => {
 
 const targetHouse = computed(() => {
   return (
-    selectedPiece.value && boardState.value[selectedPiece.value] + roll.value
+    selectedPiece.value &&
+    boardState.value[selectedPiece.value] + roll.value.value
   );
 });
 
@@ -355,13 +507,13 @@ const showExit = computed(() => {
 
   if (playerTurn.value === "black") {
     return [1, 2, 3, 4, 5].some(
-      (piece) => boardState.value[piece] + roll.value === 31
+      (piece) => boardState.value[piece] + roll.value.value === 31
     );
   }
 
   if (playerTurn.value === "white") {
     return [6, 7, 8, 9, 10].some(
-      (piece) => boardState.value[piece] + roll.value === 31
+      (piece) => boardState.value[piece] + roll.value.value === 31
     );
   }
 
@@ -370,23 +522,13 @@ const showExit = computed(() => {
 
 // Game state methods
 const initBoardState = () => {
-  boardState.value = {
-    1: 1,
-    2: 3,
-    3: 5,
-    4: 7,
-    5: 9,
-    6: 2,
-    7: 4,
-    8: 6,
-    9: 8,
-    10: 10,
-  };
+  boardState.value = { ...INITIAL_BOARD_STATE };
 };
 
 const nextTurn = (trapped) => {
   turnStatus.value = "roll";
-  if (roll.value === 2 || roll.value === 3 || trapped) {
+  bestMove.value = null;
+  if (roll.value.value === 2 || roll.value.value === 3 || trapped) {
     playerTurn.value = playerTurn.value === "white" ? "black" : "white";
     turn.value++;
   }
@@ -394,8 +536,11 @@ const nextTurn = (trapped) => {
 
 // Event handlers
 const handleRoll = () => {
+  console.log("handleRoll called, current roll:", roll.value.value);
+  bestMove.value = null;
   const rand = Math.floor(Math.random() * 5) + 1;
-  roll.value = rand;
+  roll.value = { value: rand, timestamp: Date.now() };
+  console.log("New roll value set to:", roll.value);
   turnStatus.value = "move";
 
   if (playerTurn.value === "white") {
@@ -414,6 +559,15 @@ const handleSkip = () => {
 const pieceSelected = async (houseId) => {
   if (isAnimating.value) return;
   const pieceId = houseState.value[houseId];
+
+  if (instantMove.value && validMoves.value[pieceId]) {
+    // If instant move is on and this is a valid piece, immediately move to target
+    selectedPiece.value = pieceId;
+    const targetHouseId = boardState.value[pieceId] + roll.value.value;
+    // Call self again with target house
+    pieceSelected(targetHouseId);
+    return;
+  }
 
   if (houseId === targetHouse.value && selectedPiece.value) {
     isAnimating.value = true;
@@ -518,9 +672,9 @@ const pieceSelected = async (houseId) => {
 
     // Rest of your existing logic
     if (playerTurn.value === "white") {
-      stats.value.whiteDistance += roll.value;
+      stats.value.whiteDistance += roll.value.value;
     } else {
-      stats.value.blackDistance += roll.value;
+      stats.value.blackDistance += roll.value.value;
     }
 
     nextTurn(trapped);
@@ -581,11 +735,11 @@ watch(turn, (newTurn) => {
 
 watch([playerTurn, turnStatus], async ([newPlayer, newStatus]) => {
   if (newPlayer === "black" && newStatus === "roll") {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     handleRoll();
   }
   if (newPlayer === "black" && newStatus === "move") {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 200));
     makeComputerMove();
   }
 });
@@ -595,6 +749,7 @@ const arrowsSvg = ref(null);
 const boardWidth = ref(0);
 const boardHeight = ref(0);
 const hoverPiece = ref(null);
+const instantMove = ref(true);
 
 // Helper to get next house in path
 const getNextHouseInPath = (current, end) => {
@@ -706,13 +861,18 @@ const arrowPath = computed(() => {
   if (!pieceId || !validMoves.value[pieceId]) return "";
 
   const start = boardState.value[pieceId];
-  const end = start + roll.value;
+  const end = start + roll.value.value;
 
   return calculatePathBetweenHouses(start, end);
 });
 
 // And verify showArrow includes both states
 const showArrow = computed(() => {
+  if (isComputerTurn.value) {
+    // During CPU turn, only show arrow when selectedPiece is set
+    return selectedPiece.value && validMoves.value[selectedPiece.value];
+  }
+  // During player turn, show arrow on hover or selection as before
   return (
     (hoverPiece.value && validMoves.value[hoverPiece.value]) ||
     (selectedPiece.value && validMoves.value[selectedPiece.value])
@@ -730,69 +890,12 @@ const onPieceLeave = () => {
   hoverPiece.value = null;
 };
 
-// Update board dimensions on mount
-onMounted(() => {
-  const updateBoardDimensions = () => {
-    const board = document.querySelector(".board");
-    if (board) {
-      const rect = board.getBoundingClientRect();
-      boardWidth.value = rect.width;
-      boardHeight.value = rect.height;
-    }
-  };
-
-  updateBoardDimensions();
-  window.addEventListener("resize", updateBoardDimensions);
-});
-
-onUnmounted(() => {
-  window.removeEventListener("resize", updateBoardDimensions);
-});
-
-// Add computed property for arrow marker
-const arrowMarker = computed(() => {
-  if (!hoverPiece.value || !validMoves.value[hoverPiece.value]) return "";
-
-  const start = boardState.value[hoverPiece.value];
-  const end = start + roll.value;
-
-  // Use downward arrow for vertical moves to 11 or 21
-  if ((start === 10 && end === 11) || (start === 20 && end === 21)) {
-    return "url(#arrowhead-down)";
-  }
-
-  return "url(#arrowhead)";
-});
-
-// Add computed property for path transform
-const pathTransform = computed(() => {
-  if (!hoverPiece.value || !validMoves.value[hoverPiece.value]) return "";
-
-  const start = boardState.value[hoverPiece.value];
-  const end = start + roll.value;
-
-  // For vertical moves, rotate the entire path
-  if ((start === 10 && end === 11) || (start === 20 && end === 21)) {
-    return "rotate(90)";
-  }
-
-  return "";
-});
-
-// Add a new computed property for vertical moves
-const isVerticalMove = computed(() => {
-  if (!hoverPiece.value || !validMoves.value[hoverPiece.value]) return false;
-  const start = boardState.value[hoverPiece.value];
-  const end = start + roll.value;
-  return (start === 10 && end === 11) || (start === 20 && end === 21);
-});
-
 const arrowOrientation = computed(() => {
   const pieceId = selectedPiece.value || hoverPiece.value;
   if (!pieceId || !validMoves.value[pieceId]) return "auto";
 
   const start = boardState.value[pieceId];
-  const end = start + roll.value;
+  const end = start + roll.value.value;
 
   return end === 11 || end === 21 ? "90" : "auto";
 });
@@ -820,11 +923,35 @@ const arrowOrientation = computed(() => {
   display: flex;
 }
 
-.rules {
-  max-width: 600px;
-  margin-top: 20px;
-  text-align: left;
-  color: var(--secondary-color);
+.house {
+  border-right: 1px solid var(--border-color);
+}
+.house:last-child {
+  border-right: none;
+}
+
+.row1 .house,
+.row2 .house {
+  border-bottom: 2px solid var(--secondary-color);
+}
+
+.row1 .house10,
+.row2 .house20 {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.house26 {
+  border-right: 2px solid var(--secondary-color);
+}
+
+.row3 .house30 {
+  border-right: none;
+}
+
+.house-exit {
+  position: absolute;
+  left: 100%;
+  border-left: 2px solid var(--background-color);
 }
 
 .roller {

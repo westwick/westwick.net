@@ -6,11 +6,11 @@
     @mouseover="emitHover"
     @mouseleave="$emit('piece-leave')"
   >
-    <div class="house-id">{{ id <= 30 ? id : "exit" }}</div>
+    <div class="house-id">{{ houseSymbol }}</div>
     <div
       v-if="showPiece"
       :class="`piece piece-${color} ${isSelected ? 'selected' : ''} ${
-        canMove ? 'can-move' : ''
+        shouldHighlight ? 'can-move' : ''
       } ${isTarget ? 'target' : ''}`"
       :data-piece="pieceId"
       @click="$emit('piece-selected', id)"
@@ -47,6 +47,10 @@ const props = defineProps({
     type: Number,
     default: undefined,
   },
+  bestMove: {
+    type: Number,
+    default: undefined,
+  },
 });
 
 const emit = defineEmits(["piece-selected", "piece-hover", "piece-leave"]);
@@ -77,18 +81,37 @@ const canMove = computed(
 
 const showPiece = computed(() => pieceId.value !== undefined);
 
+const houseSymbol = computed(() => {
+  if (props.id === 15) return "𓋹";
+  if (props.id === 26) return "𓄤𓄤𓄤";
+  if (props.id === 27) return "𓈗";
+  if (props.id === 28) return "𓅢";
+  if (props.id === 29) return "𓁪𓁪";
+  if (props.id === 30) return "𓂀";
+  return "";
+});
+
 const emitHover = () => {
   if (pieceId.value) {
     emit("piece-hover", pieceId.value);
   }
 };
+
+const shouldHighlight = computed(() => {
+  const piece = props.houseState[props.id];
+  if (color.value === "black") {
+    // For black's turn (CPU), only highlight the best move
+    return piece === props.bestMove && props.validMoves[piece];
+  }
+  // For white's turn (player), show all valid moves
+  return piece !== undefined && props.validMoves[piece];
+});
 </script>
 
 <style scoped>
 .house {
   width: 48px;
   height: 48px;
-  border: 1px solid #333;
   position: relative;
   display: flex;
   justify-content: center;
@@ -97,11 +120,31 @@ const emitHover = () => {
 
 .house-id {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  font-size: 12px;
-  color: #666;
-  display: none;
+  width: 48px;
+  height: 48px;
+  top: 0;
+  left: 0;
+  /* transform: translate(0, -50%); */
+  font-size: 24px;
+  color: #fff;
+  font-weight: bold;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: -1;
+  /* display: none; */
+}
+
+.house26 .house-id {
+  color: var(--primary-color);
+}
+
+.house30 .house-id {
+  color: #9e9e9e;
+}
+
+.house27 .house-id {
+  color: rgb(235, 65, 14);
 }
 
 .piece {
@@ -127,7 +170,7 @@ const emitHover = () => {
 }
 
 .selected {
-  box-shadow: 0 0 3px 3px rgba(255, 255, 255, 0.5);
+  /* box-shadow: 0 0 3px 3px rgba(255, 255, 255, 0.5); */
 }
 
 .can-move {
@@ -140,6 +183,6 @@ const emitHover = () => {
 }
 
 .target {
-  background-color: rgba(0, 255, 0, 0.2);
+  opacity: 0.5;
 }
 </style>
